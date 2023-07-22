@@ -1,0 +1,11 @@
+{
+  "MOTORCYCLES_API_KEY": "",
+  "MOTORCYCLES_API_URL": "https://api.api-ninjas.com/v1/motorcycles",
+  "REDSHIFT_CODER_DB": "",
+  "REDSHIFT_CODER_HOST": "",
+  "REDSHIFT_CODER_PASSWORD": "",
+  "REDSHIFT_CODER_PORT": 1234,
+  "REDSHIFT_CODER_SCHEMA": "",
+  "REDSHIFT_CODER_USER": "",
+  "S3_ENDPOINT_URL": "http://localstack:4566"
+}
