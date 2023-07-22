@@ -125,15 +125,15 @@ class ETL:
 
 
 @dag(
-    dag_id="entregable_3",
+    dag_id="entregable_final",
     schedule=None,
     start_date=datetime(2023, 5, 30),
     dagrun_timeout=timedelta(minutes=30),
     tags=["coder-entregables"],
 )
-def entregable_3():
+def entregable_final():
     """
-    ### Entregable 3 DAG
+    ### Entregable Final DAG
     Este pipeline extrae datos de distintos modelos de motos desde
     motorcycles API, realiza algunas transformaciones simples y
     los carga en Redshift.
@@ -334,4 +334,4 @@ def entregable_3():
     load_motorcycles_data_in_redshift(transform_motorcycles_data_response, table)
 
 
-entregable_3()
+entregable_final()
