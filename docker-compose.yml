@@ -100,7 +100,7 @@ services:
       start_period: 5s
     restart: always
     networks:
-      - entregable3-net
+      - entregablefinal-net
 
   redis:
     image: redis:latest
@@ -114,7 +114,7 @@ services:
       start_period: 30s
     restart: always
     networks:
-      - entregable3-net
+      - entregablefinal-net
 
   airflow-webserver:
     <<: *airflow-common
@@ -139,7 +139,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
     networks:
-      - entregable3-net
+      - entregablefinal-net
 
   airflow-scheduler:
     <<: *airflow-common
@@ -162,7 +162,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
     networks:
-      - entregable3-net
+      - entregablefinal-net
 
   airflow-worker:
     <<: *airflow-common
@@ -186,7 +186,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
     networks:
-      - entregable3-net
+      - entregablefinal-net
 
   airflow-triggerer:
     <<: *airflow-common
@@ -207,7 +207,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
     networks:
-      - entregable3-net
+      - entregablefinal-net
 
   airflow-init:
     <<: *airflow-common
@@ -287,7 +287,7 @@ services:
     volumes:
       - ${AIRFLOW_PROJ_DIR:-.}:/sources
     networks:
-      - entregable3-net
+      - entregablefinal-net
 
   spark:
     image: bitnami/spark:3.4.1
@@ -302,7 +302,7 @@ services:
       - "8090:8080"
       - "7077:7077"
     networks:
-      - entregable3-net
+      - entregablefinal-net
     volumes:
       - ./spark/jars/postgresql-42.5.2.jar:/tmp/drivers/postgresql-42.5.2.jar
 
@@ -318,7 +318,7 @@ services:
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
       - SPARK_SSL_ENABLED=no
     networks:
-      - entregable3-net
+      - entregablefinal-net
     volumes:
       - ./spark/jars/postgresql-42.5.2.jar:/tmp/drivers/postgresql-42.5.2.jar
 
@@ -335,11 +335,11 @@ services:
       - "./localstack/volume:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
-      - entregable3-net
+      - entregablefinal-net
 
 volumes:
   postgres-db-volume:
 
 
 networks:
-  entregable3-net:
+  entregablefinal-net:
