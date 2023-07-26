@@ -1,127 +1,17 @@
 import json
 import logging
+import smtplib
 from datetime import datetime, timedelta
-from http import HTTPStatus
 
 import boto3
-import pyspark.sql.functions as F
 import redshift_connector
-import requests
 from airflow.decorators import dag, task
 from airflow.models import Variable
-from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.functions import col
-from pyspark.sql.types import FloatType
+from common.common import get_spark_session, read_from_s3, save_in_s3
+from common.etl import ETL
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-
-def save_in_s3(bucket: str, key: str, data: str):
-    client = boto3.client(
-        "s3",
-        endpoint_url=Variable.get("S3_ENDPOINT_URL"),
-        aws_access_key_id="test",
-        aws_secret_access_key="test",
-    )
-    client.put_object(Bucket=bucket, Key=key, Body=data)
-
-
-def read_from_s3(bucket: str, key: str) -> str:
-    client = boto3.client(
-        "s3",
-        endpoint_url=Variable.get("S3_ENDPOINT_URL"),
-        aws_access_key_id="test",
-        aws_secret_access_key="test",
-    )
-    response = client.get_object(Bucket=bucket, Key=key)
-    return response["Body"].read()
-
-
-def get_spark_session():
-    spark = (
-        SparkSession.builder.master("spark://spark:7077")
-        .config(
-            "spark.jars.packages",
-            "org.apache.spark:spark-hadoop-cloud_2.12:3.2.0,org.postgresql:postgresql:42.6.0",
-        )
-        .config("spark.hadoop.fs.s3a.access.key", "test")
-        .config("spark.hadoop.fs.s3a.secret.key", "test")
-        .config("spark.hadoop.fs.s3a.endpoint", Variable.get("S3_ENDPOINT_URL"))
-        .config("spark.hadoop.fs.s3a.path.style.access", "true")
-        .getOrCreate()
-    )
-    return spark
-
-
-class ETL:
-    @staticmethod
-    def extract(manufacturers: list[str], years: list[int]) -> list[dict]:
-        api_url = Variable.get("MOTORCYCLES_API_URL")
-        api_token = Variable.get("MOTORCYCLES_API_KEY")
-        headers = {"X-Api-Key": api_token}
-
-        logger.info("Requesting raw motorcycle data...")
-        raw_motorcycles_data = []
-        for manufacturer in manufacturers:
-            for year in years:
-                logger.info(f"Manufacturer {manufacturer}, year {year}.")
-                params = {"make": manufacturer, "year": year}
-                response = requests.get(api_url, params=params, headers=headers)
-
-                if response.status_code != HTTPStatus.OK:
-                    logger.error(
-                        f"Something when wrong when requesting data from {manufacturer} in year {year}"
-                    )
-                    pass
-
-                raw_data = response.json()
-                # There might not be any manufacturer information for the given year.
-                # Do not append empty lists to the final result.
-                if raw_data:
-                    raw_motorcycles_data.append(response.json())
-
-        # Flatten the extracted data because each one of the API responses is a list[dict].
-        motorcycles_data = [
-            motorcycle
-            for raw_data_sublist in raw_motorcycles_data
-            for motorcycle in raw_data_sublist
-        ]
-
-        return motorcycles_data
-
-    @staticmethod
-    def transform(df: DataFrame) -> DataFrame:
-        transformed_df = df.withColumn("year", col("year").cast("Integer"))
-
-        def weight_in_kg(value):
-            if value:
-                return float(value.split(" kg")[0])
-            return None
-
-        udf_weight_in_kg = F.udf(weight_in_kg, FloatType())
-        for column in ["dry_weight", "total_weight"]:
-            transformed_df = transformed_df.withColumn(
-                f"{column}_kg", udf_weight_in_kg(column)
-            )
-
-        return transformed_df
-
-    @staticmethod
-    def load(df: DataFrame, table: str):
-        db_url = f"jdbc:postgresql://{Variable.get('REDSHIFT_CODER_HOST')}:{Variable.get('REDSHIFT_CODER_PORT')}/{Variable.get('REDSHIFT_CODER_DB')}"
-        user = Variable.get("REDSHIFT_CODER_USER")
-        password = Variable.get("REDSHIFT_CODER_PASSWORD")
-        _ = (
-            df.write.format("jdbc")
-            .option("url", db_url)
-            .option("dbtable", table)
-            .option("user", user)
-            .option("password", password)
-            .option("driver", "org.postgresql.Driver")
-            .mode("overwrite")
-            .save()
-        )
 
 
 @dag(
@@ -325,13 +215,11 @@ def entregable_final():
         logger.info(f"Loading data in Redshift table {table}...")
         ETL.load(df, table)
 
-    table = create_redshift_table()
-    s3_bucket = create_s3_bucket()
-    get_motorcycles_data_response = get_motorcycles_data(s3_bucket)
-    transform_motorcycles_data_response = transform_motorcycles_data_with_spark(
-        get_motorcycles_data_response
-    )
-    load_motorcycles_data_in_redshift(transform_motorcycles_data_response, table)
+    table_name = create_redshift_table()
+    s3_bucket_name = create_s3_bucket()
+    raw_s3_location = get_motorcycles_data(s3_bucket_name)
+    transformed_s3_location = transform_motorcycles_data_with_spark(raw_s3_location)
+    load_motorcycles_data_in_redshift(transformed_s3_location, table_name)
 
 
 entregable_final()
