@@ -7,7 +7,8 @@ import boto3
 import redshift_connector
 from airflow.decorators import dag, task
 from airflow.models import Variable
-from common.common import get_spark_session, read_from_s3, save_in_s3
+from common.common import (WrongWeightError, get_spark_session, read_from_s3,
+                           save_in_s3, send_alert_email)
 from common.etl import ETL
 
 logging.basicConfig(level=logging.DEBUG)
@@ -198,9 +199,51 @@ def entregable_final():
         return schema_table
 
     @task
-    def load_motorcycles_data_in_redshift(
-        transform_response: dict[str, str], table: str
-    ):
+    def check_transformed_values(
+        s3_location: dict[str, str], dag_run=None
+    ) -> dict[str, str]:
+        """
+        Verifica que los datos que se van a guardar en Redshift cumplan
+        con los parámetros de calidad preestablecidos.
+        """
+        logger.info("Getting Spark session...")
+        spark = get_spark_session()
+
+        s3_bucket = s3_location["s3_bucket"]
+        s3_key = s3_location["key"]
+        logger.info(f"Reading data from S3 s3://{s3_bucket}/{s3_key}")
+        df = spark.read.json(f"s3a://{s3_bucket}/{s3_key}")
+
+        logger.info("Checking maximum and minimum allowed weights...")
+        max_weight_limit = Variable.get("TOTAL_WEIGHT_KG_MAX_LIMIT")
+        min_weight_limit = Variable.get("TOTAL_WEIGHT_KG_MIN_LIMIT")
+        logger.info(f"max weight limit = {max_weight_limit}")
+        logger.info(f"min weight limit = {min_weight_limit}")
+        lower_than_min_df = df.where(df.total_weight_kg < min_weight_limit)
+        # TODO: include dag name and run id in email.
+        if not lower_than_min_df.isEmpty():
+            count = lower_than_min_df.count()
+            rows = lower_than_min_df.select("total_weight_kg").collect()
+            send_alert_email(
+                subject=f"Dataset contains motorcycles with weight < {min_weight_limit} kg",
+                body=f"{count} rows\n {rows}",
+            )
+            raise WrongWeightError
+
+        more_than_max_df = df.where(df.total_weight_kg < max_weight_limit)
+        if not more_than_max_df.isEmpty():
+            count = more_than_max_df.count()
+            rows = more_than_max_df.select("total_weight_kg").collect()
+            send_alert_email(
+                subject=f"Dataset contains motorcycles with weight > {max_weight_limit} kg",
+                body=f"{count} rows\n {rows}",
+            )
+            raise WrongWeightError
+
+        return s3_location
+
+    @task
+    def load_motorcycles_data_in_redshift(s3_location: dict[str, str], table: str):
         """
         Guarda los datos resultantes de la transformación en Redshift.
         Para ello, lee los datos desde S3 con Spark.
@@ -208,8 +251,8 @@ def entregable_final():
         logger.info("Getting Spark session...")
         spark = get_spark_session()
 
-        s3_bucket = transform_response["s3_bucket"]
-        s3_key = transform_response["key"]
+        s3_bucket = s3_location["s3_bucket"]
+        s3_key = s3_location["key"]
         logger.info(f"Reading data from S3 s3://{s3_bucket}/{s3_key}")
         df = spark.read.json(f"s3a://{s3_bucket}/{s3_key}")
 
@@ -220,7 +263,8 @@ def entregable_final():
     s3_bucket_name = create_s3_bucket()
     raw_s3_location = get_motorcycles_data(s3_bucket_name)
     transformed_s3_location = transform_motorcycles_data_with_spark(raw_s3_location)
-    load_motorcycles_data_in_redshift(transformed_s3_location, table_name)
+    final_s3_location = check_transformed_values(transformed_s3_location)
+    load_motorcycles_data_in_redshift(final_s3_location, table_name)
 
 
 entregable_final()

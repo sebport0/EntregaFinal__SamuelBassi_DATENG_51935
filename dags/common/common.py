@@ -1,6 +1,14 @@
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 import boto3
 from airflow.models import Variable
 from pyspark.sql import SparkSession
+
+
+class WrongWeightError(Exception):
+    pass
 
 
 def get_spark_session():
@@ -38,3 +46,17 @@ def read_from_s3(bucket: str, key: str) -> str:
     )
     response = client.get_object(Bucket=bucket, Key=key)
     return response["Body"].read()
+
+
+def send_alert_email(subject: str, body: str):
+    client = smtplib.SMTP("smtp.gmail.com", 587)
+    client.starttls()
+    msg = MIMEMultipart()
+    msg["Subject"] = subject
+    msg["From"] = Variable.get("SMTP_EMAIL_FROM")
+    msg["To"] = Variable.get("SMTP_EMAIL_TO")
+    msg.attach(MIMEText(body, "plain"))
+    client.login(Variable.get("SMTP_EMAIL_FROM"), Variable.get("SMTP_PASSWORD"))
+    client.sendmail(
+        Variable.get("SMTP_EMAIL_FROM"), Variable.get("SMTP_EMAIL_TO"), msg.as_string()
+    )
