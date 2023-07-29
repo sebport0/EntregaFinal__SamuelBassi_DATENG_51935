@@ -66,8 +66,9 @@ def entregable_final():
 
         key = "data.json"
         logger.info("Checking if data already exists in S3...")
-        motorcycles_data = json.loads(read_from_s3(s3_bucket, key))
-        if not motorcycles_data:
+        try:
+            motorcycles_data = json.loads(read_from_s3(s3_bucket, key))
+        except Exception:
             logger.info("Reading motorcycles data from API...")
             manufacturers = [
                 "Motomel",
