@@ -45,7 +45,7 @@ def entregable_final():
             aws_access_key_id="test",
             aws_secret_access_key="test",
         )
-        s3_bucket = "entregable-3"
+        s3_bucket = "entregable-final"
         logger.info(f"Attempting to create bucket {s3_bucket}...")
 
         try:
@@ -124,7 +124,7 @@ def entregable_final():
     @task
     def create_redshift_table() -> str:
         """
-        Crea la tabla 'motorcycles_entregable3' en Redshift solamente
+        Crea la tabla 'motorcycles_final' en Redshift solamente
         si dicha tabla no fue creada en una corrida anterior.
         """
 
@@ -139,7 +139,7 @@ def entregable_final():
         connection.autocommit = True
         cursor = connection.cursor()
 
-        table_name = "motorcycles_entregable3"
+        table_name = "motorcycles_final"
         logger.info(f"Creating table {table_name}...")
         schema_table = f"{Variable.get('REDSHIFT_CODER_SCHEMA')}.{table_name}"
         statement = f"""
