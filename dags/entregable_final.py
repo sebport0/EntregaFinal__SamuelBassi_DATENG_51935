@@ -1,6 +1,5 @@
 import json
 import logging
-import smtplib
 from datetime import datetime, timedelta
 
 import boto3
@@ -200,7 +199,7 @@ def entregable_final():
 
     @task
     def check_transformed_values(
-        s3_location: dict[str, str], dag_run=None
+        s3_location: dict[str, str], **context
     ) -> dict[str, str]:
         """
         Verifica que los datos que se van a guardar en Redshift cumplan
@@ -219,13 +218,14 @@ def entregable_final():
         min_weight_limit = Variable.get("TOTAL_WEIGHT_KG_MIN_LIMIT")
         logger.info(f"max weight limit = {max_weight_limit}")
         logger.info(f"min weight limit = {min_weight_limit}")
+
         lower_than_min_df = df.where(df.total_weight_kg < min_weight_limit)
-        # TODO: include dag name and run id in email.
         if not lower_than_min_df.isEmpty():
             count = lower_than_min_df.count()
             rows = lower_than_min_df.select("total_weight_kg").collect()
+            ti = context["ti"]
             send_alert_email(
-                subject=f"Dataset contains motorcycles with weight < {min_weight_limit} kg",
+                subject=f"DAG {ti.dag_id} - Run {ti.run_id} - Task {ti.task_id} - Dataset contains motorcycles with weight < {min_weight_limit} kg",
                 body=f"{count} rows\n {rows}",
             )
             raise WrongWeightError
@@ -234,8 +234,9 @@ def entregable_final():
         if not more_than_max_df.isEmpty():
             count = more_than_max_df.count()
             rows = more_than_max_df.select("total_weight_kg").collect()
+            ti = context["ti"]
             send_alert_email(
-                subject=f"Dataset contains motorcycles with weight > {max_weight_limit} kg",
+                subject=f"DAG {ti.dag_id} - Run {ti.run_id} - Task {ti.task_id} -Dataset contains motorcycles with weight > {max_weight_limit} kg",
                 body=f"{count} rows\n {rows}",
             )
             raise WrongWeightError
