@@ -61,8 +61,21 @@ Tenemos 3 componentes:
 graph LR
     A[create_s3_bucket] --> B[get_motorcycles_data]
     B --> C[transform_motorcycles_data_with_spark]
-    C --> D[load_motorcycles_data_in_redshift]
+    C --> D[check_transformed_values]
+    D --> E[load_motorcycles_data_in_redshift]
     E[create_redshift_table] --> D
 ```
 
 Se corre manualmente desde la UI de Airflow.
+
+## Alertas
+
+Se notificará a través de un email si el valor de la columna `total_weight_kg`
+excede un valor mínimo o máximo antes de cargar los datos en Redshift.
+Los límites se pueden controlar desde la sección de variables(ver
+`variables.json`). Por defecto el mínimo es 45 kg y el máximo
+es 600 kg.
+
+En la imagen se puede apreciar un ejemplo del email de alerta resultante
+
+![Ejemplo](email_example.png)
